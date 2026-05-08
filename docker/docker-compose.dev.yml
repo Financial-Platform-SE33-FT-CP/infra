@@ -1,0 +1,91 @@
+version: "3.9"
+
+# Development overrides — mount source for hot reload, enable debug
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  auth-service:
+    build:
+      context: ../backend
+      args:
+        SERVICE: auth-service
+    volumes:
+      - ../backend:/app
+    environment:
+      APP_ENV: development
+      DEBUG: "true"
+      LOG_LEVEL: DEBUG
+    command: uv run --package auth-service uvicorn auth_service.main:app --host 0.0.0.0 --port 8000 --reload
+
+  tenant-service:
+    build:
+      context: ../backend
+      args:
+        SERVICE: tenant-service
+    volumes:
+      - ../backend:/app
+    environment:
+      APP_ENV: development
+      DEBUG: "true"
+      LOG_LEVEL: DEBUG
+    command: uv run --package tenant-service uvicorn tenant_service.main:app --host 0.0.0.0 --port 8000 --reload
+
+  coa-service:
+    build:
+      context: ../backend
+      args:
+        SERVICE: coa-service
+    volumes:
+      - ../backend:/app
+    environment:
+      APP_ENV: development
+      DEBUG: "true"
+      LOG_LEVEL: DEBUG
+    command: uv run --package coa-service uvicorn coa_service.main:app --host 0.0.0.0 --port 8000 --reload
+
+  ledger-service:
+    build:
+      context: ../backend
+      args:
+        SERVICE: ledger-service
+    volumes:
+      - ../backend:/app
+    environment:
+      APP_ENV: development
+      DEBUG: "true"
+      LOG_LEVEL: DEBUG
+    command: uv run --package ledger-service uvicorn ledger_service.main:app --host 0.0.0.0 --port 8000 --reload
+
+  audit-service:
+    build:
+      context: ../backend
+      args:
+        SERVICE: audit-service
+    volumes:
+      - ../backend:/app
+    environment:
+      APP_ENV: development
+      DEBUG: "true"
+      LOG_LEVEL: DEBUG
+    command: uv run --package audit-service uvicorn audit_service.main:app --host 0.0.0.0 --port 8000 --reload
+
+  ar-ap-service:
+    build:
+      context: ../backend
+      args:
+        SERVICE: ar-ap-service
+    volumes:
+      - ../backend:/app
+    environment:
+      APP_ENV: development
+      DEBUG: "true"
+      LOG_LEVEL: DEBUG
+    command: uv run --package ar-ap-service uvicorn ar_ap_service.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    volumes:
+      - ../frontend:/app
+    environment:
+      APP_ENV: development
+      DEBUG: "true"
+    command: npm run dev

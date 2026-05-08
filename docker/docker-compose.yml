@@ -1,0 +1,222 @@
+version: "3.9"
+
+volumes:
+  accounting-pgdata:
+
+networks:
+  accounting-network:
+    driver: bridge
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    ports:
+      - "5432:5432"
+    volumes:
+      - accounting-pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: accounting
+      POSTGRES_PASSWORD: accounting_secret
+      POSTGRES_DB: accounting
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U accounting"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - accounting-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - accounting-network
+
+  auth-service:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE: auth-service
+    ports:
+      - "8001:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://accounting:accounting_secret@postgres:5432/accounting
+      JWT_SECRET: change-me-in-production
+      JWT_ALGORITHM: HS256
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+      APP_ENV: production
+      LOG_LEVEL: INFO
+      CORS_ORIGINS: '["http://localhost:3000"]'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - accounting-network
+
+  tenant-service:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE: tenant-service
+    ports:
+      - "8002:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://accounting:accounting_secret@postgres:5432/accounting
+      APP_ENV: production
+      AUTH_SERVICE_URL: http://auth-service:8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - accounting-network
+
+  coa-service:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE: coa-service
+    ports:
+      - "8003:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://accounting:accounting_secret@postgres:5432/accounting
+      APP_ENV: production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - accounting-network
+
+  ledger-service:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE: ledger-service
+    ports:
+      - "8004:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://accounting:accounting_secret@postgres:5432/accounting
+      APP_ENV: production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - accounting-network
+
+  audit-service:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE: audit-service
+    ports:
+      - "8005:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://accounting:accounting_secret@postgres:5432/accounting
+      APP_ENV: production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - accounting-network
+
+  ar-ap-service:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE: ar-ap-service
+    ports:
+      - "8006:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://accounting:accounting_secret@postgres:5432/accounting
+      APP_ENV: production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - accounting-network
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      auth-service:
+        condition: service_started
+      tenant-service:
+        condition: service_started
+      coa-service:
+        condition: service_started
+      ledger-service:
+        condition: service_started
+      audit-service:
+        condition: service_started
+      ar-ap-service:
+        condition: service_started
+    networks:
+      - accounting-network
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - frontend
+      - auth-service
+      - tenant-service
+      - coa-service
+      - ledger-service
+      - audit-service
+      - ar-ap-service
+    networks:
+      - accounting-network

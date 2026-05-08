@@ -1,0 +1,47 @@
+name: CI - COA Service
+
+on:
+  push:
+    paths:
+      - "coa-service/**"
+  pull_request:
+    paths:
+      - "coa-service/**"
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: coa-service
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[dev]
+
+      - name: Ruff check
+        working-directory: coa-service
+        run: ruff check .
+
+      - name: Black check
+        working-directory: coa-service
+        run: black --check .
+
+      - name: isort check
+        working-directory: coa-service
+        run: isort --check-only .
+
+      - name: mypy
+        working-directory: coa-service
+        run: mypy .
+
+      - name: pytest
+        working-directory: coa-service
+        run: pytest
