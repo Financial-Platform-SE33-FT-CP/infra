@@ -3,6 +3,9 @@ version: "3.9"
 # Development overrides — mount source for hot reload, enable debug
 # Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
+volumes:
+  node_modules:
+
 services:
   auth-service:
     build:
@@ -83,9 +86,13 @@ services:
     command: uv run --package ar-ap-service uvicorn ar_ap_service.main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:
+    build:
+      target: dev
     volumes:
       - ../frontend:/app
+      - node_modules:/app/node_modules
     environment:
       APP_ENV: development
       DEBUG: "true"
-    command: npm run dev
+      NEXT_PUBLIC_LEDGER_URL: http://localhost:8004
+    command: sh -c "npm install && npm run dev"
