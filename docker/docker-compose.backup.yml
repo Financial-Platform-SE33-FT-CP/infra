@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  postgres-backup:
+    image: postgres:17-alpine
+    container_name: accounting-postgres-backup
+    restart: "no"
+    volumes:
+      - ./backups:/backups
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-accounting_secret}
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-accounting}
+      PGDATABASE: ${POSTGRES_DB:-accounting}
+    command: >
+      sh -c "
+        echo 'Starting backup...' &&
+        TIMESTAMP=\$$(date +%Y%m%d_%H%M%S) &&
+        pg_dump -h \$$PGHOST -U \$$PGUSER -d \$$PGDATABASE | gzip > /backups/accounting_\$$TIMESTAMP.sql.gz &&
+        echo 'Backup completed: /backups/accounting_\$$TIMESTAMP.sql.gz' &&
+        find /backups -name 'accounting_*.sql.gz' -mtime +7 -delete
+      "
+    profiles: ["backup"]
+    networks:
+      - accounting-network

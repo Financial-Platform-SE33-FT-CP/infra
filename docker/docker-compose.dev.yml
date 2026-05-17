@@ -5,12 +5,8 @@ version: "3.9"
 
 services:
   auth-service:
-    build:
-      context: ../backend
-      args:
-        SERVICE: auth-service
     volumes:
-      - ../backend:/app
+      - ../../backend:/app
     environment:
       APP_ENV: development
       DEBUG: "true"
@@ -18,12 +14,8 @@ services:
     command: uv run --package auth-service uvicorn auth_service.main:app --host 0.0.0.0 --port 8000 --reload
 
   tenant-service:
-    build:
-      context: ../backend
-      args:
-        SERVICE: tenant-service
     volumes:
-      - ../backend:/app
+      - ../../backend:/app
     environment:
       APP_ENV: development
       DEBUG: "true"
@@ -31,12 +23,8 @@ services:
     command: uv run --package tenant-service uvicorn tenant_service.main:app --host 0.0.0.0 --port 8000 --reload
 
   coa-service:
-    build:
-      context: ../backend
-      args:
-        SERVICE: coa-service
     volumes:
-      - ../backend:/app
+      - ../../backend:/app
     environment:
       APP_ENV: development
       DEBUG: "true"
@@ -44,12 +32,8 @@ services:
     command: uv run --package coa-service uvicorn coa_service.main:app --host 0.0.0.0 --port 8000 --reload
 
   ledger-service:
-    build:
-      context: ../backend
-      args:
-        SERVICE: ledger-service
     volumes:
-      - ../backend:/app
+      - ../../backend:/app
     environment:
       APP_ENV: development
       DEBUG: "true"
@@ -57,12 +41,8 @@ services:
     command: uv run --package ledger-service uvicorn ledger_service.main:app --host 0.0.0.0 --port 8000 --reload
 
   audit-service:
-    build:
-      context: ../backend
-      args:
-        SERVICE: audit-service
     volumes:
-      - ../backend:/app
+      - ../../backend:/app
     environment:
       APP_ENV: development
       DEBUG: "true"
@@ -70,12 +50,8 @@ services:
     command: uv run --package audit-service uvicorn audit_service.main:app --host 0.0.0.0 --port 8000 --reload
 
   ar-ap-service:
-    build:
-      context: ../backend
-      args:
-        SERVICE: ar-ap-service
     volumes:
-      - ../backend:/app
+      - ../../backend:/app
     environment:
       APP_ENV: development
       DEBUG: "true"
@@ -84,7 +60,7 @@ services:
 
   frontend:
     volumes:
-      - ../frontend:/app
+      - ../../frontend:/app
     environment:
       APP_ENV: development
       DEBUG: "true"
