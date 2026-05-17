@@ -1,0 +1,23 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: backend-services-monitor
+  namespace: accounting-platform
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - auth-service
+          - tenant-service
+          - coa-service
+          - ledger-service
+          - audit-service
+          - ar-ap-service
+  endpoints:
+    - port: "8000"
+      path: /metrics
+      interval: 15s

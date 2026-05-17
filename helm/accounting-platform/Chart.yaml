@@ -1,0 +1,13 @@
+apiVersion: v2
+name: accounting-platform
+description: A Helm chart for the Accounting Platform microservices
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/Financial-Platform-SE33-FT-CP
+sources:
+  - https://github.com/Financial-Platform-SE33-FT-CP/backend
+  - https://github.com/Financial-Platform-SE33-FT-CP/frontend
+maintainers:
+  - name: SE33-FT-CP Team
+
+dependencies: []

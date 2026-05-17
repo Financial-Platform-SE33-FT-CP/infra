@@ -1,0 +1,9 @@
+{{- if .Values.namespaceCreate | default true }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespace }}
+  labels:
+    {{- include "accounting-platform.labels" . | nindent 4 }}
+    name: {{ .Values.namespace }}
+{{- end }}

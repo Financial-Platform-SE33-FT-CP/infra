@@ -19,7 +19,7 @@ jobs:
 
       - name: Validate K8s manifests
         run: |
-          kubeconform -kubernetes-version 1.30.0 -strict -summary k8s/
+          kubeconform -kubernetes-version 1.30.0 -strict -summary -ignore-missing-schemas k8s/
 
   validate-docker-compose:
     name: Validate Docker Compose
