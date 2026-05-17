@@ -1,0 +1,6 @@
+# Sub-repositories (separate git repos for backend/frontend services)
+backend/
+frontend/
+
+# Environment variables (credentials)
+.env
