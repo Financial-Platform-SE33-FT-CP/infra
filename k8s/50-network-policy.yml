@@ -1,0 +1,82 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: accounting-deny-all
+  namespace: accounting-platform
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-nginx
+  namespace: accounting-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: nginx
+  policyTypes:
+    - Ingress
+  ingress:
+    - from: []
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-to-postgres
+  namespace: accounting-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: auth-service
+        - podSelector:
+            matchLabels:
+              app: tenant-service
+        - podSelector:
+            matchLabels:
+              app: coa-service
+        - podSelector:
+            matchLabels:
+              app: ledger-service
+        - podSelector:
+            matchLabels:
+              app: audit-service
+        - podSelector:
+            matchLabels:
+              app: ar-ap-service
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-to-redis
+  namespace: accounting-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 6379

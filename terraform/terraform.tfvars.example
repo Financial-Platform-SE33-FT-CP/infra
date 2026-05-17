@@ -1,0 +1,8 @@
+# 复制本文件为 terraform.tfvars 并填入真实值
+
+aws_region   = "ap-southeast-1"
+environment  = "production"
+cluster_name = "accounting-platform"
+
+db_username = "accounting"
+db_password = "your-secure-password-here"

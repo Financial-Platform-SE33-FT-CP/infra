@@ -1,0 +1,200 @@
+# ============================================================
+# 会计平台 — Helm Chart 默认配置
+# ============================================================
+
+namespace: accounting-platform
+environment: production
+
+# --------------------------------------------------
+# 镜像配置
+# --------------------------------------------------
+registry: ghcr.io
+imagePrefix: financial-platform-se33-ft-cp/accounting-platform
+imagePullPolicy: IfNotPresent
+tag: latest
+
+# --------------------------------------------------
+# 全局环境变量
+# --------------------------------------------------
+config:
+  APP_ENV: production
+  LOG_LEVEL: INFO
+  JWT_ALGORITHM: HS256
+  JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+  CORS_ORIGINS: '["http://localhost:3000"]'
+  REDIS_URL: redis://redis:6379/0
+  AUTH_SERVICE_URL: http://auth-service:8000
+
+# --------------------------------------------------
+# 后端微服务
+# --------------------------------------------------
+services:
+  auth-service:
+    enabled: true
+    replicas: 2
+    port: 8000
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 1000m
+        memory: 512Mi
+    env:
+      JWT_SECRET: ""
+
+  tenant-service:
+    enabled: true
+    replicas: 2
+    port: 8000
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 1000m
+        memory: 512Mi
+
+  coa-service:
+    enabled: true
+    replicas: 2
+    port: 8000
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 1000m
+        memory: 512Mi
+
+  ledger-service:
+    enabled: true
+    replicas: 2
+    port: 8000
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 1000m
+        memory: 512Mi
+
+  audit-service:
+    enabled: true
+    replicas: 2
+    port: 8000
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 1000m
+        memory: 512Mi
+
+  ar-ap-service:
+    enabled: true
+    replicas: 2
+    port: 8000
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 1000m
+        memory: 512Mi
+
+# --------------------------------------------------
+# 前端
+# --------------------------------------------------
+frontend:
+  enabled: true
+  replicas: 2
+  port: 3000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+
+# --------------------------------------------------
+# Nginx 网关
+# --------------------------------------------------
+nginx:
+  enabled: true
+  replicas: 2
+  port: 80
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# --------------------------------------------------
+# PostgreSQL
+# --------------------------------------------------
+postgres:
+  enabled: true
+  image: postgres:17-alpine
+  port: 5432
+  storage: 10Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+
+# --------------------------------------------------
+# Redis
+# --------------------------------------------------
+redis:
+  enabled: true
+  image: redis:7-alpine
+  port: 6379
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# --------------------------------------------------
+# HPA 自动扩缩容
+# --------------------------------------------------
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilization: 70
+  targetMemoryUtilization: 80
+
+# --------------------------------------------------
+# Ingress
+# --------------------------------------------------
+ingress:
+  enabled: true
+  className: nginx
+  host: accounting.example.com
+  tls:
+    enabled: true
+    secretName: accounting-tls
+
+# --------------------------------------------------
+# 可观测性
+# --------------------------------------------------
+observability:
+  enabled: false
+  prometheus:
+    enabled: true
+    retention: 15d
+  grafana:
+    enabled: true
+    adminUser: admin
+  loki:
+    enabled: true

@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: accounting-sa
+  namespace: accounting-platform
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: accounting-role
+  namespace: accounting-platform
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: accounting-rolebinding
+  namespace: accounting-platform
+subjects:
+  - kind: ServiceAccount
+    name: accounting-sa
+    namespace: accounting-platform
+roleRef:
+  kind: Role
+  name: accounting-role
+  apiGroup: rbac.authorization.k8s.io
