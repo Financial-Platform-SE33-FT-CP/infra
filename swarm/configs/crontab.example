@@ -1,0 +1,16 @@
+# ============================================================
+# 会计平台 — 宿主机 Crontab 示例
+# ============================================================
+# 在 Swarm Manager 节点上执行:
+#   sudo crontab -e
+# 然后粘贴以下内容（根据实际路径调整）
+# ============================================================
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# 每天凌晨 2:00 执行 PostgreSQL 备份
+0 2 * * * /opt/accounting/infra/swarm/scripts/run-backup.sh >> /var/log/accounting-backup.log 2>&1
+
+# 每周日清理旧日志
+0 0 * * 0 find /var/log/accounting-backup.log.* -mtime +30 -delete 2>/dev/null || true
