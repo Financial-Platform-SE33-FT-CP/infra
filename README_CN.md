@@ -2,7 +2,7 @@
 
 ## 概述
 
-本目录包含会计平台微服务的完整基础设施配置。平台基于 Docker Compose 和 Kubernetes 双模式运行，
+本目录包含会计平台微服务的完整基础设施配置。平台基于 **Docker Swarm** 集群运行（已从 Kubernetes 迁移），
 包含 PostgreSQL 数据库、Redis 缓存、六个 Python 微服务、一个前端应用、Nginx 反向代理，
 以及完整的可观测性栈（Prometheus + Grafana + Loki）。
 
@@ -13,34 +13,37 @@
 ```
 infra/
 ├── README.md / README_CN.md
-├── docker/
-│   ├── docker-compose.yml              # 生产环境编排
-│   ├── docker-compose.dev.yml          # 开发环境覆盖配置
-│   └── docker-compose.backup.yml       # 数据库备份（profile: backup）
+├── Makefile                            # 统一运维命令
+├── .gitignore                          # 忽略敏感文件
+├── docker/                             # Docker Compose（本地开发）
+│   ├── docker-compose.yml
+│   ├── docker-compose.dev.yml
+│   └── docker-compose.observability.yml
+├── swarm/                              # Docker Swarm（集群生产环境）
+│   ├── docker-compose.swarm.yml        # 主 Stack 文件
+│   ├── docker-compose.swarm.observability.yml
+│   ├── env.swarm.template              # 环境变量模板（敏感）
+│   ├── configs/
+│   │   ├── nginx-default.conf          # Nginx 反向代理配置
+│   │   └── crontab.example             # 宿主机定时备份示例
+│   └── scripts/
+│       ├── init-secrets.sh             # 初始化 Docker Secrets
+│       ├── deploy-swarm.sh             # 部署 Stack
+│       ├── verify-swarm.sh             # 验证部署状态
+│       ├── run-backup.sh               # 手动执行数据库备份
+│       └── swarm-autoscale.sh          # 简易自动扩缩容示例
 ├── nginx/
-│   └── default.conf                    # 反向代理配置（含限流、安全头）
-├── k8s/                                # Kubernetes manifests
-│   ├── 01-namespace.yml
-│   ├── 02-configmap.yml
-│   ├── 03-secret.yml
-│   ├── 10-postgres.yml                 # StatefulSet + Service
-│   ├── 11-redis.yml                    # Deployment + Service
-│   ├── 20-auth-service.yml             # Deployment + Service + HPA
-│   ├── 20-tenant-service.yml
-│   ├── 20-coa-service.yml
-│   ├── 20-ledger-service.yml
-│   ├── 20-audit-service.yml
-│   ├── 20-ar-ap-service.yml
-│   ├── 30-frontend.yml
-│   ├── 31-nginx.yml
-│   └── 40-ingress.yml
+│   └── default.conf                    # 反向代理配置（参考）
 ├── observability/
 │   ├── prometheus/prometheus.yml       # 服务发现与抓取配置
 │   ├── grafana/provisioning/           # 数据源与仪表板配置
 │   ├── loki/loki-config.yml
 │   └── promtail/promtail-config.yml
-└── backup/
-    └── pg-backup.yml                   # K8s CronJob + PVC
+└── archive/                            # 已归档的旧配置（K8s/Helm/Terraform）
+    ├── k8s/
+    ├── helm/
+    ├── terraform/
+    └── pg-backup-k8s.yml
 ```
 
 ---
@@ -49,125 +52,161 @@ infra/
 
 ### 前置条件
 
-- Docker 20.10+ 与 Docker Compose 2.20+
-- 复制项目根目录 `.env.example` 为 `.env` 并修改密码
+- Docker 24.0+ 与 Docker Compose 2.20+
+- 至少 1 个 Swarm Manager 节点 + 1 个 Worker 节点（生产推荐 3 Manager）
+- 共享存储（NFS/Ceph/GlusterFS）或带 `storage=persistent` 标签的数据节点
 
-### 启动所有服务（生产模式）
+### 方式一：本地开发（Docker Compose）
 
 ```bash
-cd infra/docker
-docker compose up -d
+cd infra
+make docker-dev      # 热重载、调试日志
+make docker-obs      # 启动可观测性栈
+make docker-down     # 停止
 ```
 
-### 开发模式（热重载、调试日志）
+### 方式二：生产集群（Docker Swarm）
 
 ```bash
-cd infra/docker
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
-```
+cd infra
 
-### 启动可观测性栈
+# 1. 初始化 Swarm（Manager 节点）
+make swarm-init      # 按提示执行 docker swarm init
 
-```bash
-cd infra/docker
-docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
-```
+# 2. 标记数据节点（在存储节点上执行）
+docker node update --label-add storage=persistent <NODE-ID>
 
-### 手动执行数据库备份
+# 3. 创建 Secrets
+cd swarm && ./scripts/init-secrets.sh
 
-```bash
-cd infra/docker
-docker compose -f docker-compose.yml -f docker-compose.backup.yml --profile backup up
-```
+# 4. 配置环境变量
+cp swarm/env.swarm.template swarm/env.swarm
+# 编辑 env.swarm 填入真实值
+source swarm/env.swarm
 
-### 停止并清理
+# 5. 部署 Stack
+make swarm-deploy
 
-```bash
-docker compose -f docker-compose.yml down
-# 停止并删除数据卷（彻底清理）
-docker compose -f docker-compose.yml down -v
+# 6. （可选）部署可观测性栈
+make swarm-deploy-obs
+
+# 7. 验证
+make swarm-ps
+./swarm/scripts/verify-swarm.sh
 ```
 
 ---
 
 ## 服务映射
 
-| 服务              | 容器端口 | 主机端口 | 说明                                            |
-|-------------------|----------|----------|-------------------------------------------------|
-| **Nginx**         | 80/443   | 80/443   | 反向代理，限流、安全头、CORS                    |
-| **Frontend**      | 3000     | 3000     | Next.js Web 前端                                |
-| **Auth Service**  | 8000     | 8001     | 认证与授权 — 代理到 /api/auth/                  |
-| **Tenant Service**| 8000     | 8002     | 多租户管理 — 代理到 /api/tenants/               |
-| **COA Service**   | 8000     | 8003     | 科目表管理 — 代理到 /api/coa/                   |
-| **Ledger Service**| 8000     | 8004     | 总账 — 代理到 /api/ledger/                      |
-| **Audit Service** | 8000     | 8005     | 审计日志 — 代理到 /api/audit/                   |
-| **AR/AP Service** | 8000     | 8006     | 应收应付 — 代理到 /api/ar-ap/                   |
-| **PostgreSQL**    | 5432     | 5432     | 主数据库，带健康检查与资源限制                   |
-| **Redis**         | 6379     | 6379     | 缓存与消息队列，AOF 持久化                       |
-| **Prometheus**    | 9090     | 9090     | 指标采集与告警                                   |
-| **Grafana**       | 3000     | 3001     | 可视化仪表板                                     |
-| **Loki**          | 3100     | 3100     | 日志聚合                                         |
+| 服务              | Swarm 端口 | 本地端口 | 说明                              |
+|-------------------|------------|----------|-----------------------------------|
+| **Nginx**         | 80/443     | 80/443   | 反向代理，Swarm Routing Mesh      |
+| **Frontend**      | 3000       | 3000     | Next.js Web 前端                  |
+| **Auth Service**  | 8000       | 8001     | 认证与授权 — /api/auth/           |
+| **Tenant Service**| 8000       | 8002     | 多租户管理 — /api/tenants/        |
+| **COA Service**   | 8000       | 8003     | 科目表管理 — /api/coa/            |
+| **Ledger Service**| 8000       | 8004     | 总账 — /api/ledger/               |
+| **Audit Service** | 8000       | 8005     | 审计日志 — /api/audit/            |
+| **AR/AP Service** | 8000       | 8006     | 应收应付 — /api/ar-ap/            |
+| **PostgreSQL**    | 5432       | 5432     | 主数据库，placement 约束固定节点  |
+| **Redis**         | 6379       | 6379     | 缓存与消息队列                    |
+| **Prometheus**    | 9090       | 9090     | 指标采集（manager 节点）          |
+| **Grafana**       | 3000       | 3001     | 可视化仪表板（manager 节点）      |
+| **Loki**          | 3100       | 3100     | 日志聚合（manager 节点）          |
 
 ---
 
-## Kubernetes 部署
+## Docker Swarm 部署详解
 
-### 前置条件
-
-- Kubernetes 1.28+
-- kubectl 已配置
-- Ingress Controller（如 nginx-ingress）已安装
-- cert-manager（如需自动 TLS）
-
-### 部署步骤
+### 初始化集群
 
 ```bash
-cd infra/k8s
+# Manager 节点
+docker swarm init --advertise-addr <MANAGER-IP>
 
-# 1. 创建命名空间
-kubectl apply -f 01-namespace.yml
+# 获取加入令牌
+docker swarm join-token worker
 
-# 2. 创建 ConfigMap
-kubectl apply -f 02-configmap.yml
+# Worker 节点执行
+docker swarm join --token <TOKEN> <MANAGER-IP>:2377
+```
 
-# 3. 创建 Secret（编辑 03-secret.yml 填入真实密码后再执行）
-kubectl apply -f 03-secret.yml
+### 标记数据节点
 
-# 4. 部署数据层
-kubectl apply -f 10-postgres.yml -f 11-redis.yml
+postgres 和 redis 需要持久化存储，通过 placement constraint 固定运行：
 
-# 5. 部署后端微服务
-kubectl apply -f 20-auth-service.yml -f 20-tenant-service.yml \
-  -f 20-coa-service.yml -f 20-ledger-service.yml \
-  -f 20-audit-service.yml -f 20-ar-ap-service.yml
+```bash
+docker node update --label-add storage=persistent <NODE-ID>
+```
 
-# 6. 部署前端与网关
-kubectl apply -f 30-frontend.yml -f 31-nginx.yml
+如果使用 NFS 共享存储，可移除此约束，但建议仍约束到性能较好的节点。
 
-# 7. 配置 Ingress（修改 40-ingress.yml 中的域名）
-kubectl apply -f 40-ingress.yml
+### 创建 Secrets
 
-# 8. 启用备份
-kubectl apply -f ../backup/pg-backup.yml
+```bash
+cd swarm
+./scripts/init-secrets.sh
+```
+
+交互式创建以下 Secrets：
+- `database_url` — 数据库连接字符串
+- `postgres_password` — PostgreSQL 密码
+- `jwt_secret` — JWT 签名密钥
+- `grafana_admin_password` — Grafana 管理员密码
+
+**注意**：Docker Secret 一旦创建不可修改，只能删除重建（需先删除引用该 secret 的所有服务）。
+
+### 配置环境变量
+
+```bash
+cp swarm/env.swarm.template swarm/env.swarm
+# 编辑填入真实值
+source swarm/env.swarm
+```
+
+### 部署 Stack
+
+```bash
+make swarm-deploy
+# 或手动执行:
+# cd swarm && ./scripts/deploy-swarm.sh
+```
+
+### 部署可观测性栈
+
+```bash
+make swarm-deploy-obs
 ```
 
 ### 查看状态
 
 ```bash
-kubectl get pods -n accounting-platform
-kubectl get svc -n accounting-platform
-kubectl get hpa -n accounting-platform
-kubectl logs -f deployment/auth-service -n accounting-platform
+make swarm-services     # 服务列表
+make swarm-ps           # 任务状态
+make swarm-logs svc=auth-service   # 查看日志
 ```
 
-### 扩缩容
+### 手动扩缩容
 
-HPA 已默认启用，CPU 利用率 70% 或内存利用率 80% 时自动扩容，
-副本数范围 2-10。手动调整：
+Swarm 不原生支持 HPA，需手动扩缩容或使用脚本：
 
 ```bash
-kubectl scale deployment auth-service --replicas=5 -n accounting-platform
+# 手动扩容
+make swarm-scale svc=auth-service replicas=5
+
+# 简易自动扩缩容（基于 docker stats，每 5 分钟执行一次）
+*/5 * * * * /opt/accounting/infra/swarm/scripts/swarm-autoscale.sh auth-service 70 10
 ```
+
+### 回滚服务
+
+```bash
+make swarm-rollback svc=auth-service
+```
+
+滚动更新失败时，Swarm 会根据 `deploy.update_config.failure_action: rollback` 自动回滚。
+手动回滚用于其他场景。
 
 ---
 
@@ -175,39 +214,23 @@ kubectl scale deployment auth-service --replicas=5 -n accounting-platform
 
 ### GitHub Actions 工作流
 
-工作流位于仓库根目录 `.github/workflows/`：
-
 | 工作流文件                    | 触发条件                              | 说明                                     |
 |-------------------------------|---------------------------------------|------------------------------------------|
-| `ci-root.yml`                 | 所有 PR / Push                        | pre-commit 检查、工作流语法校验          |
-| `ci-shared-lib.yml`           | shared-lib 变更                       | ruff、mypy、pytest 单元测试              |
-| `ci-auth-service.yml`         | auth-service / shared-lib 变更        | 代码检查 + 单元测试 + Testcontainers 集成测试 |
-| `ci-tenant-service.yml`       | tenant-service / shared-lib 变更      | 同上                                     |
-| `ci-coa-service.yml`          | coa-service / shared-lib 变更         | 同上                                     |
-| `ci-ledger-service.yml`       | ledger-service / shared-lib 变更      | 同上                                     |
-| `ci-audit-service.yml`        | audit-service / shared-lib 变更       | 同上                                     |
-| `ci-ar-ap-service.yml`        | ar-ap-service / shared-lib 变更       | 同上                                     |
-| `ci-frontend.yml`             | frontend 变更                         | lint、type-check、vitest 单元测试、build |
+| `ci-infra.yml`                | 所有 PR / Push                        | Swarm Compose 语法校验、脚本检查         |
 | `docker-build-backend.yml`    | backend 变更 / tag / main push        | Matrix 构建所有后端镜像并推送至 GHCR     |
 | `docker-build-frontend.yml`   | frontend 变更 / tag / main push       | 构建前端镜像并推送至 GHCR                |
-| `release.yml`                 | Git Tag `v*`                          | 自动生成 Release Notes 与镜像清单        |
 
 ### 镜像地址
 
 ```
-ghcr.io/<OWNER>/accounting-platform-auth-service:<tag>
-ghcr.io/<OWNER>/accounting-platform-tenant-service:<tag>
-ghcr.io/<OWNER>/accounting-platform-coa-service:<tag>
-ghcr.io/<OWNER>/accounting-platform-ledger-service:<tag>
-ghcr.io/<OWNER>/accounting-platform-audit-service:<tag>
-ghcr.io/<OWNER>/accounting-platform-ar-ap-service:<tag>
-ghcr.io/<OWNER>/accounting-platform-frontend:<tag>
+ghcr.io/financial-platform-se33-ft-cp/accounting-platform-auth-service:latest
+ghcr.io/financial-platform-se33-ft-cp/accounting-platform-tenant-service:latest
+ghcr.io/financial-platform-se33-ft-cp/accounting-platform-coa-service:latest
+ghcr.io/financial-platform-se33-ft-cp/accounting-platform-ledger-service:latest
+ghcr.io/financial-platform-se33-ft-cp/accounting-platform-audit-service:latest
+ghcr.io/financial-platform-se33-ft-cp/accounting-platform-ar-ap-service:latest
+ghcr.io/financial-platform-se33-ft-cp/accounting-platform-frontend:latest
 ```
-
-### 覆盖率要求
-
-- 后端单元测试：覆盖率阈值 **75%**，低于阈值 CI 失败
-- 前端单元测试：行覆盖率、分支覆盖率、函数覆盖率均 **75%**
 
 ---
 
@@ -215,119 +238,121 @@ ghcr.io/<OWNER>/accounting-platform-frontend:<tag>
 
 ### Prometheus
 
-- URL: http://localhost:9090
+- URL: http://<MANAGER-IP>:9090
 - 已配置所有后端服务 `/metrics` 端点自动抓取
-- 如需暴露 FastAPI 指标，在各服务中添加 `prometheus-fastapi-instrumentator` 依赖
+- 在 Swarm 中，服务名（如 `auth-service:8000`）解析为 VIP，自动负载均衡
 
 ### Grafana
 
-- URL: http://localhost:3001
-- 默认账号: `admin` / `.env` 中配置的 `GRAFANA_ADMIN_PASSWORD`
+- URL: http://<MANAGER-IP>:3001
+- 默认账号: `admin` / `grafana_admin_password`（通过 Docker Secret 注入）
 - 已预配置 Prometheus 与 Loki 数据源
 
 ### Loki + Promtail
 
-- Loki URL: http://localhost:3100
-- Promtail 自动收集所有带 `logging=promtail` 标签的容器日志
-- 为服务添加标签：`docker compose` 中设置 `labels: - logging=promtail`
+- Loki URL: http://<MANAGER-IP>:3100
+- Promtail 以 `mode: global` 在每个节点运行（对应 K8s DaemonSet）
+- 自动收集所有容器日志
 
 ---
 
 ## 备份与恢复
 
-### 自动备份（Kubernetes）
+### 自动备份
 
-CronJob 每天凌晨 2 点执行（北京时间），保留最近 7 天备份。
+在 Swarm Manager 节点配置宿主机 crontab：
 
 ```bash
-# 查看备份历史
-kubectl get cronjobs -n accounting-platform
-kubectl get jobs -n accounting-platform
+# 复制示例配置
+sudo cp infra/swarm/configs/crontab.example /etc/cron.d/accounting-backup
 
-# 手动触发备份
-kubectl create job --from=cronjob/postgres-backup manual-backup-$(date +%s) -n accounting-platform
+# 或手动编辑
+crontab -e
+# 添加:
+0 2 * * * /opt/accounting/infra/swarm/scripts/run-backup.sh >> /var/log/accounting-backup.log 2>&1
+```
 
-# 查看备份文件
-kubectl exec -it deployment/postgres -n accounting-platform -- ls /backups
+保留策略：自动清理 7 天前的旧备份。
+
+### 手动备份
+
+```bash
+make swarm-backup
+# 或:
+cd swarm && ./scripts/run-backup.sh
 ```
 
 ### 恢复备份
 
 ```bash
-# 进入 postgres 容器
-kubectl exec -it deployment/postgres -n accounting-platform -- bash
-
-# 恢复指定备份
-gunzip < /backups/accounting_YYYYMMDD_HHMMSS.sql.gz | psql -U accounting -d accounting
-```
-
-### Docker Compose 备份
-
-```bash
-cd infra/docker
-docker compose -f docker-compose.yml -f docker-compose.backup.yml --profile backup up
-ls backups/
+# 在任意可访问 swarm network 的节点执行
+docker run --rm \
+  --network accounting-platform_accounting-network \
+  --secret postgres_password \
+  -v /path/to/backups:/backups \
+  postgres:17-alpine sh -c '
+    export PGPASSWORD=$(cat /run/secrets/postgres_password)
+    gunzip < /backups/accounting_YYYYMMDD_HHMMSS.sql.gz | psql -h postgres -U accounting -d accounting
+  '
 ```
 
 ---
 
 ## 环境变量
 
-| 变量                          | 默认值 / 示例                              | 说明                              |
-|-------------------------------|--------------------------------------------|-----------------------------------|
-| `POSTGRES_USER`               | `accounting`                               | PostgreSQL 用户名                  |
-| `POSTGRES_PASSWORD`           | `change_me_in_production`                  | PostgreSQL 密码（必须修改）        |
-| `POSTGRES_DB`                 | `accounting`                               | PostgreSQL 数据库名                |
-| `DATABASE_URL`                | `postgresql+asyncpg://...`                 | SQLAlchemy 连接字符串              |
-| `REDIS_URL`                   | `redis://redis:6379/0`                     | Redis 连接字符串                   |
-| `JWT_SECRET`                  | `change_me_in_production`                  | JWT 签名密钥（必须修改）           |
-| `JWT_ALGORITHM`               | `HS256`                                    | JWT 签名算法                       |
-| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `30`                                   | Access Token 过期时间（分钟）      |
-| `APP_ENV`                     | `production`                               | 运行环境                           |
-| `LOG_LEVEL`                   | `INFO`                                     | 日志级别                           |
-| `CORS_ORIGINS`                | `["http://localhost:3000"]`                | 允许的前端地址                     |
-| `AUTH_SERVICE_URL`            | `http://auth-service:8000`                 | 认证服务内部地址                   |
-| `GRAFANA_ADMIN_USER`          | `admin`                                    | Grafana 管理员账号                 |
-| `GRAFANA_ADMIN_PASSWORD`      | `change_me_in_production`                  | Grafana 管理员密码（必须修改）     |
+| 变量                          | 来源                    | 说明                              |
+|-------------------------------|-------------------------|-----------------------------------|
+| `DATABASE_URL`                | `env.swarm`             | SQLAlchemy 连接字符串              |
+| `JWT_SECRET`                  | `env.swarm`             | JWT 签名密钥                       |
+| `POSTGRES_PASSWORD`           | Docker Secret           | PostgreSQL 密码（通过 *_FILE 注入）|
+| `GRAFANA_ADMIN_PASSWORD`      | Docker Secret           | Grafana 密码（通过 *_FILE 注入）   |
+| `APP_ENV`                     | compose 文件            | 运行环境                           |
+| `LOG_LEVEL`                   | compose 文件            | 日志级别                           |
+| `JWT_ALGORITHM`               | compose 文件            | JWT 签名算法                       |
+| `REDIS_URL`                   | compose 文件            | Redis 连接字符串                   |
+| `AUTH_SERVICE_URL`            | compose 文件            | 认证服务内部地址                   |
+| `CORS_ORIGINS`                | compose 文件            | 允许的前端地址                     |
 
 ---
 
-## 网络拓扑
+## 网络拓扑（Swarm 模式）
 
 ```
-                    ┌─────────────┐
-                    │   Ingress   │  :443
-                    │   / Nginx   │  :80
-                    └─────┬───────┘
-                          │
-            ┌─────────────┼─────────────────┐
-            │             │                 │
-      ┌─────┴─────┐  ┌───┴──────┐   ┌─────┴──────┐
-      │ /api/auth │  │ /api/coa │   │ /api/ledger│
-      │ /api/ten. │  │ etc.     │   │            │
-      └─────┬─────┘  └───┬──────┘   └─────┬──────┘
-            │             │                 │
-      ┌─────┴─────┐  ┌───┴────────┐  ┌────┴────────┐
-      │ auth-svc  │  │ coa-svc    │  │ ledger-svc  │
-      │ (2 repl.) │  │ (2 repl.)  │  │ (2 repl.)   │
-      ├───────────┤  ├────────────┤  ├─────────────┤
-      │ ten-svc   │  │ audit-svc  │  │ ar-ap-svc   │
-      │ (2 repl.) │  │ (2 repl.)  │  │ (2 repl.)   │
-      └─────┬─────┘  └─────┬──────┘  └──────┬──────┘
-            │              │                │
-            └──────────────┼────────────────┘
-                           │
-                    ┌──────┴──────┐
-                    │  PostgreSQL │
-                    │  StatefulSet│
-                    └─────────────┘
-                    ┌─────────────┐
-                    │    Redis    │
-                    └─────────────┘
-                    ┌─────────────┐
-                    │  Frontend   │
-                    │  (2 repl.)  │
-                    └─────────────┘
+              ┌─────────────────────────────────────┐
+              │      Docker Swarm Routing Mesh      │
+              │         任意节点 :80 / :443         │
+              └───────────────┬─────────────────────┘
+                              │
+                    ┌─────────┴────────┐
+                    │      Nginx       │  (replicas: 2)
+                    │   Load Balancer  │
+                    └─────────┬────────┘
+                              │
+        ┌─────────┬───────────┼───────────┬───────────┐
+        │         │           │           │           │
+   ┌────┴───┐ ┌───┴────┐ ┌───┴────┐ ┌───┴────┐ ┌────┴───┐
+   │/api/auth│ │/api/ten│ │/api/coa│ │/api/led│ │/api/...│
+   └────┬───┘ └───┬────┘ └───┬────┘ └───┬────┘ └────┬───┘
+        │         │          │          │           │
+   ┌────┴───┐ ┌───┴────┐ ┌───┴────┐ ┌───┴────┐ ┌────┴───┐
+   │ auth   │ │ tenant │ │  coa   │ │ ledger │ │  ...   │
+   │(2 repl)│ │(2 repl)│ │(2 repl)│ │(2 repl)│ │(2 repl)│
+   └────┬───┘ └───┬────┘ └───┬────┘ └───┬────┘ └────┬───┘
+        │         │          │          │           │
+        └─────────┴──────────┴────┬─────┴───────────┘
+                                  │
+                    ┌─────────────┴─────────────┐
+                    │      accounting-network   │
+                    │      (overlay, encrypted) │
+                    └─────────────┬─────────────┘
+                                  │
+                    ┌─────────────┼─────────────┐
+                    │             │             │
+              ┌─────┴─────┐ ┌────┴────┐ ┌─────┴─────┐
+              │ PostgreSQL│ │  Redis  │ │  Frontend │
+              │(1 repl,  │ │(1 repl, │ │(2 repl)  │
+              │placement) │ │placement)│ │           │
+              └───────────┘ └─────────┘ └───────────┘
 ```
 
 ---
@@ -335,7 +360,12 @@ ls backups/
 ## 注意事项
 
 1. **JWT_SECRET** 和 **POSTGRES_PASSWORD** 在生产环境中必须使用强密码，切勿使用默认值。
-2. **HTTPS**: Docker Compose 环境中默认仅暴露 HTTP 端口。生产环境建议在前方放置 Cloudflare、AWS ALB 或自行配置 TLS 证书。
-3. **K8s Secret**: `03-secret.yml` 中的值为占位符，部署前务必替换为真实值，并建议使用 Sealed Secrets 或 External Secrets Operator 管理。
-4. **资源限制**: Docker Compose 和 K8s 中均已配置 CPU/内存限制，请根据实际负载调整。
-5. **健康检查**: 所有后端服务均已配置 `/health` 端点探针，确保服务就绪后才接收流量。
+2. **Docker Secrets**: 敏感信息已迁移至 Docker Secrets，宿主机 `.env.swarm` 仍需保护，不应提交到版本库（已加入 `.gitignore`）。
+3. **持久化存储**: postgres 和 redis 通过 `node.labels.storage == persistent` 约束固定到数据节点。生产环境强烈建议使用 NFS/Ceph 等共享存储，避免单点故障导致数据丢失。
+4. **HPA 替代**: Docker Swarm 不支持原生水平自动扩缩容。已提供 `swarm-autoscale.sh` 示例脚本，生产环境建议基于 Prometheus 指标构建更完善的自动扩缩容方案。
+5. **Network Policy 替代**: Swarm 的 overlay 网络默认隔离不同 stack。如需更细粒度的网络隔离，可使用 `--opt encrypted`（已启用）或考虑创建多个 overlay network。
+6. **RBAC 替代**: Swarm 没有 K8s 级别的 RBAC。访问控制通过 Docker API TLS 证书和节点角色（Manager/Worker）实现。生产环境建议限制 Manager 节点访问权限。
+7. **Ingress 替代**: Swarm 使用 Routing Mesh + Nginx Service 替代 K8s Ingress。如需更高级的路由功能（自动证书、灰度发布），可迁移至 Traefik。
+8. **滚动更新与回滚**: 所有服务已配置 `update_config` 和 `rollback_config`，更新失败会自动回滚到上一个稳定版本。
+9. **健康检查**: 所有后端服务均已配置 `/health` 端点，Swarm 会结合健康检查进行滚动更新调度。
+10. **多节点日志**: Promtail 以 `global` 模式在每个节点运行，确保收集整个集群的容器日志。

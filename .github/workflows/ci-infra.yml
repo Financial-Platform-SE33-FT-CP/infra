@@ -6,32 +6,56 @@ on:
   pull_request:
 
 jobs:
-  validate-k8s:
-    name: Validate K8s Manifests
+  validate-swarm-compose:
+    name: Validate Swarm Compose
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up kubeconform
-        uses: bmuschko/setup-kubeconform@v1
-        with:
-          kubeconform-version: "0.6.7"
-
-      - name: Validate K8s manifests
+      - name: Validate docker-compose.swarm.yml
         run: |
-          kubeconform -kubernetes-version 1.30.0 -strict -summary -ignore-missing-schemas k8s/
+          # 创建最小环境变量以满足 compose 解析
+          export DATABASE_URL="postgresql+asyncpg://accounting:pass@postgres:5432/accounting"
+          export JWT_SECRET="ci-test-secret"
+          docker compose -f swarm/docker-compose.swarm.yml config > /dev/null
 
-  validate-docker-compose:
-    name: Validate Docker Compose
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+      - name: Validate docker-compose.swarm.observability.yml
+        run: |
+          export GRAFANA_ADMIN_PASSWORD="ci-test"
+          docker compose -f swarm/docker-compose.swarm.observability.yml config > /dev/null
 
-      - name: Validate docker-compose.yml
-        run: docker compose -f docker/docker-compose.yml config > /dev/null
-
-      - name: Validate docker-compose.dev.yml
+      - name: Validate docker-compose.dev.yml (local dev)
         run: docker compose -f docker/docker-compose.yml -f docker/docker-compose.dev.yml config > /dev/null
 
-      - name: Validate docker-compose.observability.yml
+      - name: Validate docker-compose.observability.yml (local dev)
         run: docker compose -f docker/docker-compose.yml -f docker/docker-compose.observability.yml config > /dev/null
+
+  validate-scripts:
+    name: Validate Shell Scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run shellcheck
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          shellcheck swarm/scripts/*.sh || true
+
+  check-env-template:
+    name: Check Env Template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure env.swarm.template exists
+        run: |
+          test -f swarm/env.swarm.template
+          echo "✅ env.swarm.template 存在"
+
+      - name: Ensure no real secrets in repo
+        run: |
+          if find . -name "env.swarm" -o -name ".env.swarm" | grep -q .; then
+            echo "❌ 发现 env.swarm 文件，不应提交到版本库"
+            exit 1
+          fi
+          echo "✅ 未提交敏感 env.swarm 文件"
