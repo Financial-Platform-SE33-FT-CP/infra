@@ -1,9 +1,19 @@
+# ============================================================
+# 会计平台 — 单机生产环境 Compose
+# 使用 GHCR 预构建镜像，不依赖 Swarm
+# ============================================================
+#
+# 部署:
+#   source .env.production
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# 或配合可观测性:
+#   docker compose -f docker-compose.prod.yml -f docker-compose.observability.yml up -d
+# ============================================================
+
 volumes:
   accounting-pgdata:
   accounting-redisdata:
-  grafana-data:
-  prometheus-data:
-  loki-data:
 
 networks:
   accounting-network:
@@ -17,30 +27,20 @@ services:
     image: postgres:17-alpine
     container_name: accounting-postgres
     restart: unless-stopped
-    ports:
-      - "5432:5432"
     volumes:
       - accounting-pgdata:/var/lib/postgresql/data
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-accounting}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-accounting_secret}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-accounting}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-accounting}"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 30s
     networks:
       - accounting-network
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
     logging:
       driver: json-file
       options:
@@ -51,8 +51,6 @@ services:
     image: redis:7-alpine
     container_name: accounting-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     volumes:
       - accounting-redisdata:/data
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
@@ -61,14 +59,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 5s
+      start_period: 10s
     networks:
       - accounting-network
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
     logging:
       driver: json-file
       options:
@@ -76,48 +69,36 @@ services:
         max-file: "3"
 
   # ============================================================
-  # 后端微服务
+  # 后端微服务 (使用 GHCR 预构建镜像)
   # ============================================================
   auth-service:
-    build:
-      context: ../../backend
-      dockerfile: Dockerfile
-      args:
-        SERVICE: auth-service
+    image: ghcr.io/financial-platform-se33-ft-cp/accounting-platform-auth-service:develop
     container_name: accounting-auth-service
     restart: unless-stopped
-    ports:
-      - "8001:8000"
+    command: uvicorn auth_service.main:app --host 0.0.0.0 --port 8000
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://accounting:accounting_secret@postgres:5432/accounting}
+      APP_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_SECRET: ${JWT_SECRET}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}"
-      APP_ENV: ${APP_ENV:-production}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8000}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 15s
+      start_period: 30s
     networks:
       - accounting-network
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 128M
     logging:
       driver: json-file
       options:
@@ -125,41 +106,33 @@ services:
         max-file: "3"
 
   tenant-service:
-    build:
-      context: ../../backend
-      dockerfile: Dockerfile
-      args:
-        SERVICE: tenant-service
+    image: ghcr.io/financial-platform-se33-ft-cp/accounting-platform-tenant-service:develop
     container_name: accounting-tenant-service
     restart: unless-stopped
-    ports:
-      - "8002:8000"
+    command: uvicorn tenant_service.main:app --host 0.0.0.0 --port 8000
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      auth-service:
-        condition: service_started
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://accounting:accounting_secret@postgres:5432/accounting}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      APP_ENV: ${APP_ENV:-production}
+      APP_ENV: production
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}"
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8000}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 15s
+      start_period: 30s
     networks:
       - accounting-network
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
     logging:
       driver: json-file
       options:
@@ -167,38 +140,33 @@ services:
         max-file: "3"
 
   coa-service:
-    build:
-      context: ../../backend
-      dockerfile: Dockerfile
-      args:
-        SERVICE: coa-service
+    image: ghcr.io/financial-platform-se33-ft-cp/accounting-platform-coa-service:develop
     container_name: accounting-coa-service
     restart: unless-stopped
-    ports:
-      - "8003:8000"
+    command: uvicorn coa_service.main:app --host 0.0.0.0 --port 8000
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://accounting:accounting_secret@postgres:5432/accounting}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      APP_ENV: ${APP_ENV:-production}
+      APP_ENV: production
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}"
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8000}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 15s
+      start_period: 30s
     networks:
       - accounting-network
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
     logging:
       driver: json-file
       options:
@@ -206,38 +174,33 @@ services:
         max-file: "3"
 
   ledger-service:
-    build:
-      context: ../../backend
-      dockerfile: Dockerfile
-      args:
-        SERVICE: ledger-service
+    image: ghcr.io/financial-platform-se33-ft-cp/accounting-platform-ledger-service:develop
     container_name: accounting-ledger-service
     restart: unless-stopped
-    ports:
-      - "8004:8000"
+    command: uvicorn ledger_service.main:app --host 0.0.0.0 --port 8000
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://accounting:accounting_secret@postgres:5432/accounting}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      APP_ENV: ${APP_ENV:-production}
+      APP_ENV: production
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}"
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8000}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 15s
+      start_period: 30s
     networks:
       - accounting-network
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
     logging:
       driver: json-file
       options:
@@ -245,38 +208,33 @@ services:
         max-file: "3"
 
   audit-service:
-    build:
-      context: ../../backend
-      dockerfile: Dockerfile
-      args:
-        SERVICE: audit-service
+    image: ghcr.io/financial-platform-se33-ft-cp/accounting-platform-audit-service:develop
     container_name: accounting-audit-service
     restart: unless-stopped
-    ports:
-      - "8005:8000"
+    command: uvicorn audit_service.main:app --host 0.0.0.0 --port 8000
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://accounting:accounting_secret@postgres:5432/accounting}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      APP_ENV: ${APP_ENV:-production}
+      APP_ENV: production
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}"
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8000}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 15s
+      start_period: 30s
     networks:
       - accounting-network
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
     logging:
       driver: json-file
       options:
@@ -284,38 +242,33 @@ services:
         max-file: "3"
 
   ar-ap-service:
-    build:
-      context: ../../backend
-      dockerfile: Dockerfile
-      args:
-        SERVICE: ar-ap-service
+    image: ghcr.io/financial-platform-se33-ft-cp/accounting-platform-ar-ap-service:develop
     container_name: accounting-ar-ap-service
     restart: unless-stopped
-    ports:
-      - "8006:8000"
+    command: uvicorn ar_ap_service.main:app --host 0.0.0.0 --port 8000
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://accounting:accounting_secret@postgres:5432/accounting}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      APP_ENV: ${APP_ENV:-production}
+      APP_ENV: production
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}"
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8000}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 15s
+      start_period: 30s
     networks:
       - accounting-network
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
     logging:
       driver: json-file
       options:
@@ -326,13 +279,12 @@ services:
   # 前端与网关
   # ============================================================
   frontend:
-    build:
-      context: ../../frontend
-      dockerfile: Dockerfile
+    image: ghcr.io/financial-platform-se33-ft-cp/accounting-platform-frontend:develop
     container_name: accounting-frontend
     restart: unless-stopped
-    ports:
-      - "3000:3000"
+    environment:
+      APP_ENV: production
+      NODE_ENV: production
     depends_on:
       - auth-service
       - tenant-service
@@ -340,13 +292,14 @@ services:
       - ledger-service
       - audit-service
       - ar-ap-service
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/',r=>{process.exit(r.statusCode===200?0:1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     networks:
       - accounting-network
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
     logging:
       driver: json-file
       options:
@@ -359,10 +312,14 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
-      - "443:443"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
     depends_on:
       - frontend
       - auth-service
@@ -373,11 +330,6 @@ services:
       - ar-ap-service
     networks:
       - accounting-network
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
     logging:
       driver: json-file
       options:

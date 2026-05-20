@@ -3,6 +3,8 @@
 # ============================================================
 
 .PHONY: help docker-up docker-down docker-dev docker-obs docker-backup \
+        compose-prod-up compose-prod-down compose-prod-obs compose-prod-pull \
+        deploy-remote \
         swarm-init swarm-deploy swarm-deploy-obs swarm-rm swarm-ps swarm-logs \
         swarm-services swarm-scale swarm-rollback validate lint
 
@@ -28,6 +30,24 @@ docker-obs: ## 启动可观测性栈（本地）
 
 docker-backup: ## 执行数据库备份（本地）
 	cd docker && docker compose -f docker-compose.yml -f docker-compose.backup.yml --profile backup up
+
+# --------------------------------------------------
+# Docker Compose (单机生产部署, GHCR 镜像)
+# --------------------------------------------------
+compose-prod-up: ## 启动生产环境（GHCR 镜像）
+	cd docker && docker compose --env-file .env -f docker-compose.prod.yml up -d
+
+compose-prod-down: ## 停止生产环境
+	cd docker && docker compose -f docker-compose.prod.yml down
+
+compose-prod-obs: ## 启动生产环境 + 可观测性栈
+	cd docker && docker compose --env-file .env -f docker-compose.prod.yml -f docker-compose.observability.yml up -d
+
+compose-prod-pull: ## 拉取最新 GHCR 镜像
+	cd docker && docker compose -f docker-compose.prod.yml pull
+
+deploy-remote: ## 部署到远程主机 root@sfxfs.org
+	./deploy.sh
 
 # --------------------------------------------------
 # Docker Swarm (集群部署)

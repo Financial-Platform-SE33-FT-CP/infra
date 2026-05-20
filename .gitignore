@@ -1,5 +1,8 @@
-# Swarm 环境变量（包含敏感信息）
+# 环境变量（包含敏感信息）
 env.swarm
+*.env
+!env.production.example
+!env.swarm.template
 
 # 本地备份目录
 backups/
@@ -21,3 +24,6 @@ terraform.tfvars
 # OS
 .DS_Store
 Thumbs.db
+
+# Token 文件
+.ghcr_token

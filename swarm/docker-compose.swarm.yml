@@ -11,8 +11,6 @@
 #   postgres / redis 通过 placement.constraints 固定到带标签的数据节点。
 # ============================================================
 
-version: "3.9"
-
 volumes:
   pgdata:
     driver: local
@@ -156,6 +154,7 @@ services:
   # ============================================================
   auth-service:
     image: ghcr.io/financial-platform-se33-ft-cp/accounting-platform-auth-service:latest
+    command: uvicorn auth_service.main:app --host 0.0.0.0 --port 8000
     environment:
       APP_ENV: production
       LOG_LEVEL: INFO
@@ -205,7 +204,7 @@ services:
           - spread: node.id
         constraints: []
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -220,6 +219,7 @@ services:
 
   tenant-service:
     image: ghcr.io/financial-platform-se33-ft-cp/accounting-platform-tenant-service:latest
+    command: uvicorn tenant_service.main:app --host 0.0.0.0 --port 8000
     environment:
       APP_ENV: production
       LOG_LEVEL: INFO
@@ -268,7 +268,7 @@ services:
         preferences:
           - spread: node.id
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -283,6 +283,7 @@ services:
 
   coa-service:
     image: ghcr.io/financial-platform-se33-ft-cp/accounting-platform-coa-service:latest
+    command: uvicorn coa_service.main:app --host 0.0.0.0 --port 8000
     environment:
       APP_ENV: production
       LOG_LEVEL: INFO
@@ -331,7 +332,7 @@ services:
         preferences:
           - spread: node.id
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -346,6 +347,7 @@ services:
 
   ledger-service:
     image: ghcr.io/financial-platform-se33-ft-cp/accounting-platform-ledger-service:latest
+    command: uvicorn ledger_service.main:app --host 0.0.0.0 --port 8000
     environment:
       APP_ENV: production
       LOG_LEVEL: INFO
@@ -394,7 +396,7 @@ services:
         preferences:
           - spread: node.id
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -409,6 +411,7 @@ services:
 
   audit-service:
     image: ghcr.io/financial-platform-se33-ft-cp/accounting-platform-audit-service:latest
+    command: uvicorn audit_service.main:app --host 0.0.0.0 --port 8000
     environment:
       APP_ENV: production
       LOG_LEVEL: INFO
@@ -457,7 +460,7 @@ services:
         preferences:
           - spread: node.id
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -472,6 +475,7 @@ services:
 
   ar-ap-service:
     image: ghcr.io/financial-platform-se33-ft-cp/accounting-platform-ar-ap-service:latest
+    command: uvicorn ar_ap_service.main:app --host 0.0.0.0 --port 8000
     environment:
       APP_ENV: production
       LOG_LEVEL: INFO
@@ -520,7 +524,7 @@ services:
         preferences:
           - spread: node.id
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -571,7 +575,7 @@ services:
         preferences:
           - spread: node.id
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/',r=>{process.exit(r.statusCode===200?0:1)})"]
       interval: 30s
       timeout: 10s
       retries: 3

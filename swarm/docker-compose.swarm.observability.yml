@@ -11,8 +11,6 @@
 #   - prometheus/grafana/loki 限制在 manager 节点运行
 # ============================================================
 
-version: "3.9"
-
 volumes:
   prometheus-data:
     driver: local
