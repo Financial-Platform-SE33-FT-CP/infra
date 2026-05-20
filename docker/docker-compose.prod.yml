@@ -82,16 +82,26 @@ services:
       redis:
         condition: service_healthy
     environment:
-      APP_ENV: ${APP_ENV:-development}
+      APP_ENV: ${APP_ENV:-production}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       JWT_SECRET: ${JWT_SECRET}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}"
-      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
+      JWT_REFRESH_TOKEN_EXPIRE_DAYS: "${JWT_REFRESH_TOKEN_EXPIRE_DAYS:-7}"
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://sfxfs.org","http://localhost:3000"]}
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8000}
-      EMAIL_VERIFICATION_REQUIRED: "${EMAIL_VERIFICATION_REQUIRED:-true}"
+      FRONTEND_URL: ${FRONTEND_URL:-http://sfxfs.org}
+      # 等 GHCR 镜像更新后可改为 true（新版代码不再抛异常）
+      EMAIL_VERIFICATION_REQUIRED: "${EMAIL_VERIFICATION_REQUIRED:-false}"
+      SMTP_HOST: ${SMTP_HOST:-smtp.qq.com}
+      SMTP_PORT: "${SMTP_PORT:-465}"
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Accounting Platform}
+      SMTP_USE_TLS: "${SMTP_USE_TLS:-true}"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
@@ -124,8 +134,9 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}"
-      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://sfxfs.org","http://localhost:3000"]}
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8000}
+      TENANT_SERVICE_URL: ${TENANT_SERVICE_URL:-http://tenant-service:8000}
       TENANT_INTERNAL_API_TOKEN: ${TENANT_INTERNAL_API_TOKEN}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -159,8 +170,9 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}"
-      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://sfxfs.org","http://localhost:3000"]}
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8000}
+      TENANT_SERVICE_URL: ${TENANT_SERVICE_URL:-http://tenant-service:8000}
       TENANT_INTERNAL_API_TOKEN: ${TENANT_INTERNAL_API_TOKEN}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
