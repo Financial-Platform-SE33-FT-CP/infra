@@ -91,6 +91,7 @@ services:
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}"
       CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8000}
+      EMAIL_VERIFICATION_REQUIRED: "${EMAIL_VERIFICATION_REQUIRED:-false}"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
@@ -278,8 +279,18 @@ services:
   # ============================================================
   # 前端与网关
   # ============================================================
+  # ============================================================
+  # 前端 (推荐使用 GHCR 预构建镜像; 本地 build 作为 fallback)
+  # ============================================================
   frontend:
     image: ghcr.io/financial-platform-se33-ft-cp/accounting-platform-frontend:develop
+    # 当 GHCR 镜像尚未包含最新前端修改时, 可在服务器端本地构建:
+    #   1. 上传 frontend 源码到服务器
+    #   2. 取消下面 build 注释, 注释 image 行
+    #   3. docker compose build frontend && docker compose up -d frontend
+    # build:
+    #   context: ./build/frontend
+    #   dockerfile: Dockerfile
     container_name: accounting-frontend
     restart: unless-stopped
     environment:
