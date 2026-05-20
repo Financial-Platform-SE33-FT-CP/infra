@@ -82,7 +82,7 @@ services:
       redis:
         condition: service_healthy
     environment:
-      APP_ENV: production
+      APP_ENV: ${APP_ENV:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
@@ -91,7 +91,7 @@ services:
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}"
       CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8000}
-      EMAIL_VERIFICATION_REQUIRED: "${EMAIL_VERIFICATION_REQUIRED:-false}"
+      EMAIL_VERIFICATION_REQUIRED: "${EMAIL_VERIFICATION_REQUIRED:-true}"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
@@ -126,6 +126,7 @@ services:
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}"
       CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8000}
+      TENANT_INTERNAL_API_TOKEN: ${TENANT_INTERNAL_API_TOKEN}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
@@ -160,6 +161,7 @@ services:
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}"
       CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8000}
+      TENANT_INTERNAL_API_TOKEN: ${TENANT_INTERNAL_API_TOKEN}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
@@ -194,6 +196,7 @@ services:
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}"
       CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8000}
+      TENANT_INTERNAL_API_TOKEN: ${TENANT_INTERNAL_API_TOKEN}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
