@@ -537,6 +537,76 @@ services:
         labels: "service_name,node_id"
         tag: "{{.ImageName}}/{{.Name}}/{{.ID}}"
 
+  billing-service:
+    image: ghcr.io/financial-platform-se33-ft-cp/accounting-platform-billing-service:latest
+    command: uvicorn billing_service.main:app --host 0.0.0.0 --port 8000
+    environment:
+      APP_ENV: production
+      LOG_LEVEL: INFO
+      JWT_ALGORITHM: HS256
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+      CORS_ORIGINS: '["http://localhost:3000"]'
+      TENANT_SERVICE_URL: "http://tenant-service:8000"
+      TENANT_INTERNAL_API_TOKEN: ${TENANT_INTERNAL_API_TOKEN}
+      POSTGRES_USER: accounting
+      POSTGRES_DB: accounting
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      STRIPE_MOCK_MODE: "${STRIPE_MOCK_MODE:-false}"
+      STRIPE_PRICE_IDS: ${STRIPE_PRICE_IDS}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    secrets:
+      - source: database_url
+        mode: 0444
+      - source: jwt_secret
+        mode: 0444
+    networks:
+      - accounting-network
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 30s
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+        monitor: 30s
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+        failure_action: pause
+        monitor: 30s
+      placement:
+        preferences:
+          - spread: node.id
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/billing/health-complete')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service_name,node_id"
+        tag: "{{.ImageName}}/{{.Name}}/{{.ID}}"
+
   # ============================================================
   # 前端与网关
   # ============================================================

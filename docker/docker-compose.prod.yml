@@ -291,6 +291,47 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  billing-service:
+    image: ghcr.io/financial-platform-se33-ft-cp/accounting-platform-billing-service:develop
+    container_name: accounting-billing-service
+    restart: unless-stopped
+    command: uvicorn billing_service.main:app --host 0.0.0.0 --port 8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      tenant-service:
+        condition: service_started
+    environment:
+      APP_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}"
+      TENANT_SERVICE_URL: ${TENANT_SERVICE_URL:-http://tenant-service:8000}
+      TENANT_INTERNAL_API_TOKEN: ${TENANT_INTERNAL_API_TOKEN}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      STRIPE_MOCK_MODE: "${STRIPE_MOCK_MODE:-false}"
+      STRIPE_PRICE_IDS: ${STRIPE_PRICE_IDS}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/billing/health-complete')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - accounting-network
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   # ============================================================
   # 前端与网关
   # ============================================================
@@ -318,6 +359,7 @@ services:
       - ledger-service
       - audit-service
       - ar-ap-service
+      - billing-service
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/',r=>{process.exit(r.statusCode===200?0:1)})"]
       interval: 30s
@@ -354,6 +396,7 @@ services:
       - ledger-service
       - audit-service
       - ar-ap-service
+      - billing-service
     networks:
       - accounting-network
     logging:

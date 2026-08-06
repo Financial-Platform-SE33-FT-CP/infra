@@ -322,6 +322,57 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  billing-service:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE: billing-service
+    container_name: accounting-billing-service
+    restart: unless-stopped
+    ports:
+      - "8007:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      tenant-service:
+        condition: service_started
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://accounting:accounting_secret@postgres:5432/accounting}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}"
+      APP_ENV: ${APP_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TENANT_SERVICE_URL: ${TENANT_SERVICE_URL:-http://tenant-service:8000}
+      TENANT_INTERNAL_API_TOKEN: ${TENANT_INTERNAL_API_TOKEN:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_MOCK_MODE: "${STRIPE_MOCK_MODE:-false}"
+      STRIPE_PRICE_IDS: ${STRIPE_PRICE_IDS:-}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/billing/health-complete"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - accounting-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   # ============================================================
   # 前端与网关
   # ============================================================
@@ -340,6 +391,7 @@ services:
       - ledger-service
       - audit-service
       - ar-ap-service
+      - billing-service
     networks:
       - accounting-network
     deploy:
@@ -371,6 +423,7 @@ services:
       - ledger-service
       - audit-service
       - ar-ap-service
+      - billing-service
     networks:
       - accounting-network
     deploy:

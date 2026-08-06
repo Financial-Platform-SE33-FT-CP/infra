@@ -56,6 +56,15 @@ services:
       LOG_LEVEL: DEBUG
     command: uv run --package ar-ap-service uvicorn ar_ap_service.main:app --host 0.0.0.0 --port 8000 --reload
 
+  billing-service:
+    volumes:
+      - ../../backend:/app
+    environment:
+      APP_ENV: development
+      DEBUG: "true"
+      LOG_LEVEL: DEBUG
+    command: uv run --package billing-service uvicorn billing_service.main:app --host 0.0.0.0 --port 8000 --reload
+
   frontend:
     volumes:
       - ../../frontend:/app
