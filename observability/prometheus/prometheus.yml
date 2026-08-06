@@ -42,6 +42,11 @@ scrape_configs:
       - targets: ['ar-ap-service:8000']
     metrics_path: /metrics
 
+
+  - job_name: 'billing-service'
+    static_configs:
+      - targets: ['billing-service:8000']
+    metrics_path: /metrics
   - job_name: 'postgres-exporter'
     static_configs:
       - targets: ['postgres-exporter:9187']

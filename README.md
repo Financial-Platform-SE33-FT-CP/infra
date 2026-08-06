@@ -107,6 +107,7 @@ make swarm-ps
 | **Ledger Service**| 8000       | 8004       | General ledger — /api/ledger/        |
 | **Audit Service** | 8000       | 8005       | Audit logs — /api/audit/             |
 | **AR/AP Service** | 8000       | 8006       | AR/AP — /api/ar-ap/                  |
+| **Billing Service**| 8000       | 8007       | Stripe billing — /api/billing/      |
 | **PostgreSQL**    | 5432       | 5432       | Primary DB, pinned to data node      |
 | **Redis**         | 6379       | 6379       | Cache & message broker               |
 | **Prometheus**    | 9090       | 9090       | Metrics collection (manager node)    |

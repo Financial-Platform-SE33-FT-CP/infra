@@ -109,6 +109,7 @@ make swarm-ps
 | **Ledger Service**| 8000       | 8004     | 总账 — /api/ledger/               |
 | **Audit Service** | 8000       | 8005     | 审计日志 — /api/audit/            |
 | **AR/AP Service** | 8000       | 8006     | 应收应付 — /api/ar-ap/            |
+| **Billing Service**| 8000       | 8007       | Stripe 计费 — /api/billing/         |
 | **PostgreSQL**    | 5432       | 5432     | 主数据库，placement 约束固定节点  |
 | **Redis**         | 6379       | 6379     | 缓存与消息队列                    |
 | **Prometheus**    | 9090       | 9090     | 指标采集（manager 节点）          |

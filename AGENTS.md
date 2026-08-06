@@ -17,6 +17,7 @@ Internet
     ├── /api/ledger/*   → ledger-service:8000
     ├── /api/audit/*    → audit-service:8000
     ├── /api/ar-ap/*    → ar-ap-service:8000
+    ├── /api/billing/*  → billing-service:8000
     └── /               → frontend:3000
         All backend services → PostgreSQL:5432
         Optional: → Redis:6379
@@ -34,6 +35,7 @@ Internet
 | Ledger Service | 8000 | — | `/api/ledger/` | 2 |
 | Audit Service | 8000 | — | `/api/audit/` | 2 |
 | AR/AP Service | 8000 | — | `/api/ar-ap/` | 2 |
+| Billing Service | 8000 | — | `/api/billing/` | 2 |
 | PostgreSQL | 5432 | — | — | 1 (constrained) |
 | Redis | 6379 | — | — | 1 (constrained) |
 
